@@ -206,7 +206,7 @@ private:
         }
     }
     vector<pair<int, string> > compute_diffs(vector<pair<int, int> >) {
-        //TODO(@kira) Complete this code.
+        //TODO(@kira) Complete this code. Maybe tomorrow...
     }
 public:
     // Returns an array of diff chunks.
