@@ -4,11 +4,15 @@
 //  O(ND) Algorithm for text diffing
 //  Paper source : http://www.xmailserver.org/diff2.pdf
 
+#ifndef DIFF_HPP
+#define DIFF_HPP
+
 #include <map>
 #include <cstring>
+#include <vector>
 
 // For not confusing the values
-enum class diff_type {
+enum diff_type {
     EQUAL,
     INSERT,
     ERASE
@@ -18,34 +22,36 @@ enum class diff_type {
 class Diff {
 private:
     // The 2 texts
-    string textA, textB;
+    std::string textA, textB;
+    // Contains the diffs between texts, in case we need it more than once
+    std::vector<std::pair<diff_type, std::string> > diffs;
     // Increments the 2 indices while the positions have equal values
-    void forward_advance(int &i, int &j) {
-        while (i + 1 != textA.length() && j + 1 !== textB.length() && A[i + 1] == B[j + 1]) {
+    void forward_advance(int &i, int &j, std::string &A, std::string &B) {
+        while (i + 1 != A.length() && j + 1 != B.length() && A[i + 1] == B[j + 1]) {
             i += 1;
             j += 1;
         }
     }
     // Decrements the 2 indices while the positions have equal values
-    void backward_advance(int &i, int &j) {
-        while (i != 0 && j != 0 && A[i - 1] == B[j - 1]) {
+    void backward_advance(int &i, int &j, std::string &A, std::string &B) {
+        while (i != 0 && j != 0 && A[i] == B[j]) {
             i -= 1;
             j -= 1;
         }
     }
     // Checks wether a cell is in range of the matrix dynamic
-    bool is_in_range(pair<int, int> cell) {
-        return (cell.first >= 1 && cell.first <= textA.length() && cell.second >= 1 && cell.second <= textB.length());
+    bool is_in_range(std::pair<int, int> cell) {
+        return (cell.first >= 0 && cell.first <= textA.length() && cell.second >= 0 && cell.second <= textB.length());
     }
     // Returns the coordinates describing the snake
-    vector<pair<int, int> > get_points(pair<int, int> a, pair<int, int> b, map<pair<int, int>, pair<int, int> > &father) {
-        vector<pair<int, int> > points;
+    std::vector<std::pair<int, int> > get_points(std::pair<int, int> a, std::pair<int, int> b, std::map<std::pair<int, int>, std::pair<int, int>> &father) {
+        std::vector<std::pair<int, int> > points;
         // Compute the prefix points of the snake
         while (is_in_range(a)) {
             points.push_back(a);
             auto parent = father[a];
             // We were skipping the equals but now me must take them all
-            while (textA[a.first - 2] == textB[a.second - 2]) {
+            while (textA[a.first - 1] == textB[a.second - 1]) {
                 a.first -= 1;
                 a.second -= 1;
                 if (is_in_range(a)) {
@@ -59,13 +65,13 @@ private:
         // We need to reverse them as they are in the opposite order
         std::reverse(points.begin(), points.end());
         // Compute the suffix points of the snake (these are inserted in the right order)
-        while (is_in_range(b)) {
+        while (is_in_range({b.first, b.second})) {
             points.push_back(b);
             auto parent = father[b];
             // Same thing as in previous while
             while (textA[b.first] == textB[b.second]) {
-                a.first += 1;
-                a.second += 1;
+                b.first += 1;
+                b.second += 1;
                 if (is_in_range(b)) {
                     points.push_back(b);
                 } else {
@@ -82,40 +88,42 @@ private:
         return points;
     }
     // Returns the snake path in the dynamic matrix described as a succes
-    vector<pair<int, int> > compute_snake(string A, string B) {
+    std::vector<std::pair<int, int> > compute_snake(std::string A, std::string B) {
         // We have to index the dynamic from 1
         A = " " + A;
         B = " " + B;
         // Indices for comparing texts
         int begin_i = 0;
         int begin_j = 0;
-        int end_i = A.length();
-        int end_j = B.length();
+        int end_i = A.length() - 1;
+        int end_j = B.length() - 1;
         
         // Maximum editing distance
-        int maxD = (1 + A.length() + B.length()) / 2;
+        int maxD = (2 + A.length() + B.length()) / 2;
         
         // Remember positions in the "snakes"
-        map<int, pair<int, int> > distance_begin[maxD];
-        map<int, pair<int, int> > distance_end[maxD];
+        std::vector<std::map<int, std::pair<int, int> > > distance_begin(maxD);
+        std::vector<std::map<int, std::pair<int, int> > > distance_end(maxD);
         // We need this for remembering the track of the cells
-        map<pair<int, int>, pair<int, int> > father;
+        std::map<std::pair<int, int>, std::pair<int, int> > father;
         // We use these to mark whether we reached the cell on the other corner
-        map<pair<int, int>, bool> reachA;
-        map<pair<int, int>, bool> reachB;
+        std::map<std::pair<int, int>, bool> reachA;
+        std::map<std::pair<int, int>, bool> reachB;
         
-        forward_advance(begin_i, begin_j);
+        forward_advance(begin_i, begin_j, A, B);
         distance_begin[0][0] = {begin_i, begin_j};
-        father[{begin_i, begin_j}] = {0, 0};
+        father[{begin_i, begin_j}] = {-1, -1};
+        reachA[{begin_i, begin_j}] = true;
         
-        // In this case the texts are identical
-        if (end_i == begin_i && end_j == begin_j) {
-            return get_points({begin_i, begin_j}, {end_i, end_j});
+        // In this case the taexts are identical
+        if (begin_i == A.length() - 1 && begin_j == B.length() - 1) {
+            return get_points({begin_i, begin_j}, {end_i + 1, end_j + 1}, father);
         }
         
-        backward_advance(end_i, end_j);
+        backward_advance(end_i, end_j, A, B);
         distance_end[0][B.length() - A.length()] = {end_i, end_j};
         father[{end_i, end_j}] = {A.length(), B.length()};
+        reachB[{end_i, end_j}] = true;
         
         // Iterate through the diffing distance
         for (int d = 1; d <= maxD; d += 1) {
@@ -124,7 +132,7 @@ private:
             // Iterate throguh the best for each diagonal starting from top-left
             for (auto &it : distance_begin[d - 1]) {
                 // Advance and update by making another step
-                diagonal_decay = it.first;
+                int diagonal_decay = it.first;
                 begin_i = it.second.first;
                 begin_j = it.second.second;
                 
@@ -132,13 +140,13 @@ private:
                     int new_decay = diagonal_decay - 1;
                     int new_i = begin_i + 1;
                     int new_j = begin_j;
-                    if (reachB[new_i][new_j]) {
-                        return get_points(it, {new_i, new_j});
+                    if (reachB[{new_i, new_j}]) {
+                        return get_points(it.second, {new_i, new_j}, father);
                     }
-                    forward_advance(new_i, new_j);
+                    forward_advance(new_i, new_j, A, B);
                     reachA[distance_begin[d + 1][new_decay]] = false;
                     auto cell = distance_begin[d + 1][new_decay];
-                    if (!cell || cell.first + cell.second < new_i + new_j) {
+                    if (!cell.first || cell.first + cell.second < new_i + new_j) {
                         distance_begin[d + 1][new_decay] = {new_i, new_j};
                         father[{new_i, new_j}] = {begin_i, begin_j};
                     }
@@ -149,13 +157,13 @@ private:
                     int new_decay = diagonal_decay + 1;
                     int new_i = begin_i;
                     int new_j = begin_j + 1;
-                    if (reachB[new_i][new_j]) {
-                        return get_points(it, {new_i, new_j});
+                    if (reachB[{new_i, new_j}]) {
+                        return get_points(it.second, {new_i, new_j}, father);
                     }
-                    forward_advance(new_i, new_j);
+                    forward_advance(new_i, new_j, A, B);
                     reachA[distance_begin[d + 1][new_decay]] = false;
                     auto cell = distance_begin[d + 1][new_decay];
-                    if (!cell || cell.first + cell.second < new_i + new_j) {
+                    if (!cell.first || cell.first + cell.second < new_i + new_j) {
                         distance_begin[d + 1][new_decay] = {new_i, new_j};
                         father[{new_i, new_j}] = {begin_i, begin_j};
                     }
@@ -165,38 +173,38 @@ private:
             // Same as previous for but starting from bottom-right
             for (auto &it : distance_end[d - 1]) {
                 // Same as previous for
-                diagonal_decay = it.first;
+                int diagonal_decay = it.first;
                 begin_i = it.second.first;
                 begin_j = it.second.second;
                 
-                if (begin_i - 1 > 0) {
+                if (begin_i - 1 >= 0) {
                     int new_decay = diagonal_decay + 1;
                     int new_i = begin_i - 1;
                     int new_j = begin_j;
-                    if (reachA[new_i][new_j]) {
-                        return get_points({new_i, new_j}, it);
+                    if (reachA[{new_i, new_j}]) {
+                        return get_points({new_i, new_j}, it.second, father);
                     }
-                    forward_advance(new_i, new_j);
+                    backward_advance(new_i, new_j, A, B);
                     reachB[distance_end[d + 1][new_decay]] = false;
                     auto cell = distance_end[d + 1][new_decay];
-                    if (!cell || cell.first + cell.second > new_i + new_j) {
+                    if (!cell.first || cell.first + cell.second > new_i + new_j) {
                         distance_end[d + 1][new_decay] = {new_i, new_j};
                         father[{new_i, new_j}] = {begin_i, begin_j};
                     }
                     reachB[distance_end[d + 1][new_decay]] = true;
                 }
                 
-                if (begin_j - 1 > 0) {
+                if (begin_j - 1 >= 0) {
                     int new_decay = diagonal_decay - 1;
                     int new_i = begin_i;
                     int new_j = begin_j - 1;
-                    if (reachA[new_i][new_j]) {
-                        return get_points({new_i, new_j}, it);
+                    if (reachA[{new_i, new_j}]) {
+                        return get_points({new_i, new_j}, it.second, father);
                     }
-                    forward_advance(new_i, new_j);
+                    backward_advance(new_i, new_j, A, B);
                     reachB[distance_end[d + 1][new_decay]] = false;
                     auto cell = distance_end[d + 1][new_decay];
-                    if (!cell || cell.first + cell.second > new_i + new_j) {
+                    if (!cell.first || cell.first + cell.second > new_i + new_j) {
                         distance_end[d + 1][new_decay] = {new_i, new_j};
                         father[{new_i, new_j}] = {begin_i, begin_j};
                     }
@@ -204,26 +212,81 @@ private:
                 }
             }
         }
+        return {{0,0}};
     }
-    vector<pair<int, string> > compute_diffs(vector<pair<int, int> >) {
-        //TODO(@kira) Complete this code. Maybe tomorrow...
+    // Given the array of points it computes the actual diffing
+    std::vector<std::pair<diff_type, std::string> > compute_diffs(std::vector<std::pair<int, int> > points) {
+        diffs.clear();
+        for (int i = 0; i < points.size(); i += 1) {
+            diff_type type;
+            if (i + 1 != points.size()) {
+                if (points[i + 1].first > points[i].first && points[i + 1].second > points[i].second) {
+                    type = diff_type::EQUAL;
+                } else if (points[i + 1].first > points[i].first && points[i + 1].second == points[i].second) {
+                    type = diff_type::ERASE;
+                } else if (points[i + 1].second > points[i].second && points[i + 1].first == points[i].first) {
+                    type = diff_type::INSERT;
+                }
+            } else {
+                break;
+            }
+            int startA = points[i].first;
+            int startB = points[i].second;
+            if (type == diff_type::EQUAL) {
+                while (i + 1 < points.size() && points[i + 1].first > points[i].first && points[i + 1].second > points[i].second) {
+                    i += 1;
+                }
+            } else if (type == diff_type::ERASE) {
+                while (i + 1 < points.size() && points[i + 1].first > points[i].first && points[i + 1].second == points[i].second) {
+                    i += 1;
+                }
+            } else if (type == diff_type::INSERT) {
+                while (i + 1 < points.size() && points[i + 1].second > points[i].second && points[i + 1].first == points[i].first) {
+                    i += 1;
+                }
+            }
+            int endA = points[i].first;
+            int endB = points[i].second;
+            i--;
+            if (startA < endA) {
+                diffs.push_back({type, textA.substr(startA + 1, endA - startA)});
+            } else if (startB < endB) {
+                diffs.push_back({type, textB.substr(startB + 1, endB - startB)});
+            }
+        }
+        return diffs;
     }
 public:
     // Returns an array of diff chunks.
     // Each chunk has a type (equal, insert or erase) and the string chunk
-    vector<pair<int, string> > make_diff(string A, string B) {
+    std::vector<std::pair<diff_type, std::string> > make_diff(std::string A, std::string B) {
         textA = A;
         textB = B;
 
-        return compute_diffs(compute_snake());
+        return compute_diffs(compute_snake(textA, textB));
     }
-    
-    Diff () {
-        
+    // Make diffs from last texts
+    std::vector<std::pair<diff_type, std::string> > make_diff() {
+        return compute_diffs(compute_snake(textA, textB));
     }
-    
-    Diff(string A, string B) {
+    // Getter for the first text given
+    std::string getTextA() {
+        return textA;
+    }
+    // Getter for the second text given
+    std::string getTextB() {
+        return textB;
+    }
+    // Getter for the last diffing made
+    std::vector<std::pair<diff_type, std::string> > getLastDiff() {
+        return diffs;
+    }
+    // Default constructor
+    Diff () {}
+    // Constructor where texts are given
+    Diff(std::string A, std::string B) {
         textA = A;
-        textB = B
+        textB = B;
     }
 };
+#endif // DIFF_HPP
